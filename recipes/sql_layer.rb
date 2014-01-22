@@ -33,5 +33,6 @@ package "fdb-sql-layer" do
 end
 
 service "fdb-sql-layer" do
+  action :nothing
   supports :status => true, :restart => true
 end

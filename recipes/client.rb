@@ -21,13 +21,29 @@ package "foundationdb-clients" do
   provider Chef::Provider::Package::Dpkg if node['platform_family'] == 'debian'
 end
 
-if node['fdb']['cluster']
+if node.attribute?('fdb')
   directory "/etc/foundationdb" do
   end
 
-  file "/etc/foundationdb/fdb.cluster" do
-    content "#{node['fdb']['cluster']}"
-    mode "0644"
-    action :create_if_missing
+  # The whole definition as a single attribute, for access to external
+  # clusters and solo setup.
+  if cluster = node['fdb']['cluster']
+    file "/etc/foundationdb/fdb.cluster" do
+      content "#{cluster}"
+      mode "0644"
+    end
+
+  # Just the cluster id. Need to build it up.
+  elsif cluster_id = node['fdb']['cluster_id']
+
+    template "/etc/foundationdb/fdb.cluster" do
+      source "cluster.erb"
+      variables({
+        :id => cluster_id,
+        :coordinators => search(:node, "fdb_cluster_id:#{cluster_id} AND fdb_coordinator:*")
+      })
+      mode "0644"
+    end
+    
   end
 end

@@ -1,0 +1,1 @@
+local:<%= cluster_id %>@<% coordinators.each do |c| %><%= c['fdb']['processes'] ? c['fdb']['processes'][0]['id'] : '4500' %> <% end %>
