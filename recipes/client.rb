@@ -25,25 +25,33 @@ if node.attribute?('fdb')
   directory "/etc/foundationdb" do
   end
 
-  # The whole definition as a single attribute, for access to external
-  # clusters and solo setup.
-  if cluster = node['fdb']['cluster']
-    file "/etc/foundationdb/fdb.cluster" do
-      content "#{cluster}"
-      mode "0644"
+  if cluster_id = node['fdb']['cluster']
+    coordinators = []
+    search(:node, "fdb_cluster:#{cluster_id}") do |cnode|
+      (cnode['fdb']['server'] or []).each do |serv|
+        coordinators << "#{cnode['ipaddress']}:#{serv['id']}" if serv['coordinator']
+      end
     end
+    coordinators.sort!
 
-  # Just the cluster id. Need to build it up.
-  elsif cluster_id = node['fdb']['cluster_id']
-
-    template "/etc/foundationdb/fdb.cluster" do
-      source "cluster.erb"
-      variables({
-        :id => cluster_id,
-        :coordinators => search(:node, "fdb_cluster_id:#{cluster_id} AND fdb_coordinator:*")
-      })
-      mode "0644"
+    if File.exists?('/etc/foundationdb/fdb.cluster') &&
+       (node['fdb']['server'] || []).detect {|s| s['coordinator'] }
+      # Change an existing cluster via command line.
+      old_cluster = IO.read('/etc/foundationdb/fdb.cluster')
+      old_coordinators = old_cluster =~ /.+@(.*)/ && $1.split(',')
+      unless coordinators == old_coordinators
+        command = "coordinators #{coordinators.join(' ')}"
+        fdb command do
+          
+        end
+      end
+    else
+      # Just update file.
+      file "/etc/foundationdb/fdb.cluster" do
+        content "local:#{cluster_id}@#{coordinators.join(',')}"
+        mode "0644"
+      end
     end
-    
   end
+
 end

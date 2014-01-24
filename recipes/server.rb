@@ -3,7 +3,7 @@
 # Recipe:: server
 #
 
-new_cluster = node['fdb']['coordinator'] == '1' && !::File.exists?('/etc/foundationdb/fdb.cluster')
+new_cluster = node['fdb']['server'][0]['coordinator'] && !::File.exists?('/etc/foundationdb/fdb.cluster')
 
 include_recipe 'fdb::client'
 
@@ -29,16 +29,16 @@ service "foundationdb" do
   action :nothing
   supports :status => true, :restart => true
 #  subscribes :restart, 'file[/etc/foundationdb/fdb.cluster]'
-#  subscribes :restart, 'template[/etc/foundationdb/fdb.cluster]'
-end
-
-if new_cluster
-  fdb "configure new" do
-    command "configure new single memory"
-    timeout 20
-  end
 end
 
 if node.attribute?('fdb')
   # TODO: generate foundationdb.conf with template.
+end
+
+if new_cluster
+  cluster = data_bag_item('fdb_cluster', node['fdb']['cluster'])
+  command = "configure new #{cluster['redundancy']} #{cluster['storage']}"
+  fdb command do
+    timeout 20
+  end
 end

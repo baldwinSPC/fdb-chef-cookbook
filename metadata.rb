@@ -14,5 +14,8 @@ depends           "apt"
 depends           "java"
 
 attribute "fdb/cluster",
-  :display_name => "FDB Cluster definition",
-  :description => "fdb.cluster contents"
+  :display_name => "FDB Cluster",
+  :description => "cluster unique id"
+attribute "fdb/server",
+  :display_name => "FDB Server",
+  :description => "FDB server parameters"

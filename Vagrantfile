@@ -1,26 +1,9 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-Vagrant.configure('2') do |config|
+require 'json'
 
-  cluster_size = ENV['FDB_CLUSTER_SIZE']
-  cluster_file = ENV['FDB_CLUSTER']
-  if cluster_size.nil?
-    if cluster_file.nil?
-      cluster_size = 2          # External server
-    else
-      cluster_size = 0          # No servers
-    end
-  end
-  if cluster_file.nil?
-    cluster_file = "fdb.cluster"
-    unless File.exists?(cluster_file)
-      chars = [('0'..'9'), ('a'..'z'), ('A'..'Z')].map { |i| i.to_a }.flatten
-      cluster_id = (1..8).map { chars[rand(chars.length)] }.join
-      IO.write cluster_file, "local:#{cluster_id}@10.33.33.30:4500"
-    end
-  end
-  cluster_fdb_attrs = { 'cluster' => IO.read(cluster_file) }
+Vagrant.configure('2') do |config|
 
   if Vagrant.has_plugin?('vagrant-cachier')
     config.cache.auto_detect = true
@@ -28,53 +11,86 @@ Vagrant.configure('2') do |config|
     config.cache.enable :apt
   end
 
+  config.berkshelf.enabled = true
+
+  # Script "arguments"
+  server_count = ENV['FDB_SERVER_COUNT'] || 2
+  process_count = ENV['FDB_PROCESS_COUNT'] || 1
+  sql_layer_count = ENV['FDB_SQL_LAYER_COUNT'] || 1
+  cluster_id = ENV['FDB_CLUSTER_ID']
+
+  # Create everything where solo search can find it.
+  Dir.mkdir 'data_bags' unless Dir.exists?('data_bags')
+  Dir.mkdir 'data_bags/fdb_cluster' unless Dir.exists?('data_bags/fdb_cluster')
+  if cluster_id.nil?
+    existing = Dir.glob('data_bags/fdb_cluster/*.json').first
+    cluster_id = File.basename(existing, '.json') unless existing.nil?
+  end
+  if cluster_id.nil?
+      chars = [('0'..'9'), ('a'..'z'), ('A'..'Z')].map { |i| i.to_a }.flatten
+      cluster_id = (1..8).map { chars[rand(chars.length)] }.join
+  end    
+  
+  unless File.exists?("data_bags/fdb_cluster/#{cluster_id}")
+    IO.write "data_bags/fdb_cluster/#{cluster_id}.json", JSON.dump({
+      :id => cluster_id,
+      :redundancy => :single,
+      :storage => :memory
+    })
+  end
+
+  nodes = {}
+
+  server_count.times do |n|
+    node = {
+      :id => "fdb-#{n}",
+      :memory => 1024, :cpus => 1,
+      :ipaddress => "10.33.33.#{30 + n}",
+      :fdb => { 
+        :cluster => cluster_id,
+        :server => (4500..4500+process_count-1).collect {|id| { :id => id } }
+      },
+      :run_list => [ 'recipe[fdb::server]' ]
+    }
+    node[:fdb][:server][0][:coordinator] = true if n == 0
+    nodes[node[:id]] = node
+  end  
+
+  sql_layer_count.times do |n|
+    node = {
+      :id => "sql-#{n}",
+      :memory => 512, :cpus => 2,
+      :ipaddress => "10.33.33.#{50 + n}",
+      :fdb => { :cluster => cluster_id },
+      :run_list => [ 'recipe[fdb::sql_layer]' ]
+    }
+    nodes[node[:id]] = node
+  end
+
+  Dir.mkdir 'data_bags/node' unless Dir.exists?('data_bags/node')
+  nodes.each do |id, node|
+    IO.write "data_bags/node/#{id}.json", JSON.dump(node)
+  end
+
   config.vm.box = 'ubuntu'
   config.vm.box_url = 'http://files.vagrantup.com/precise64.box'
   
-  config.berkshelf.enabled = true
+  nodes.each do |id, node|
+    config.vm.define id do |vm_config|
+      vm_config.vm.hostname = node[:id]
 
-  cluster_size.times do |n|
-
-    config.vm.define "fdb-#{n}" do |fdb_config|
-      
-      fdb_config.vm.hostname = "fdb-#{n}"
-
-      fdb_config.vm.provider :virtualbox do |vb|
-        vb.customize ['modifyvm', :id, '--memory', '1024']
+      vm_config.vm.provider :virtualbox do |vb|
+        vb.customize ['modifyvm', :id, '--memory', node[:memory], '--cpus', node[:cpus] ]
       end
 
-      fdb_config.vm.network :private_network, :ip => "10.33.33.#{30 + n}"
+      vm_config.vm.network :private_network, :ip => node[:ipaddress]
 
-      node_fdb_attrs = cluster_fdb_attrs.dup
-      node_fdb_attrs['coordinator'] = '1' if n == 0
-
-      fdb_config.vm.provision :chef_solo do |chef|
-        chef.json = { 'fdb' => node_fdb_attrs }
-
-        chef.run_list = [ 'recipe[fdb::server]' ]
+      vm_config.vm.provision :chef_solo do |chef|
+        chef.data_bags_path = 'data_bags'
+        chef.json = node
+        chef.run_list = node[:run_list]
       end
-
     end
-
-  end
-
-  config.vm.define 'sql-layer' do |sql_config|
-  
-    sql_config.vm.hostname = 'sql-layer'
-
-    sql_config.vm.provider :virtualbox do |vb|
-      vb.customize ['modifyvm', :id, '--memory', '512', '--cpus', '2']
-    end
-
-    sql_config.vm.network :private_network, :ip => '10.33.33.50'
-
-    node_fdb_attrs = cluster_fdb_attrs.dup
-    sql_config.vm.provision :chef_solo do |chef|
-      chef.json = { 'fdb' => node_fdb_attrs }
-
-      chef.run_list = [ 'recipe[fdb::sql_layer]' ]
-    end
-
   end
   
 end
