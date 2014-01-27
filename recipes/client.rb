@@ -27,7 +27,9 @@ if node.attribute?('fdb')
 
   if cluster_name = node['fdb']['cluster']
     cluster_item = data_bag_item('fdb_cluster', cluster_name)
-    prefix = "#{cluster_name.gsub(/[^a-zA-Z0-9_]/,'_')}:#{cluster_item['unique_id']}"
+    cluster_desc = cluster_name.gsub(/[^a-zA-Z0-9_]/,'_')
+    cluster_id = cluster_item['unique_id']
+    prefix = "#{cluster_desc}:#{cluster_id}"
 
     coordinators = []
     search(:node, "fdb_cluster:#{cluster_name}") do |cnode|
@@ -52,6 +54,21 @@ if node.attribute?('fdb')
           command = "coordinators #{coordinators.join(' ')}"
           fdb command do
             
+          end
+          # That will generate a new id that needs to go back into the data bag item.
+          ruby_block "update cluster_item" do
+            block do
+              cluster_name = node['fdb']['cluster']
+              cluster_item = data_bag_item('fdb_cluster', cluster_name)
+              cluster_desc = cluster_name.gsub(/[^a-zA-Z0-9_]/,'_')
+              cluster_id = cluster_item['unique_id']
+              new_cluster = IO.read('/etc/foundationdb/fdb.cluster')
+              if new_cluster =~ /(.+):(.+)@.+/ && cluster_desc == $1 && cluster_id != $2
+                cluster_id = $2
+                cluster_item['unique_id'] = cluster_id
+                cluster_item.save
+              end
+            end
           end
         end
         update_file = false
