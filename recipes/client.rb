@@ -25,30 +25,42 @@ if node.attribute?('fdb')
   directory "/etc/foundationdb" do
   end
 
-  if cluster_id = node['fdb']['cluster']
+  if cluster_name = node['fdb']['cluster']
+    cluster_item = data_bag_item('fdb_cluster', cluster_name)
+    prefix = "#{cluster_name.gsub(/[^a-zA-Z0-9_]/,'_')}:#{cluster_item['unique_id']}"
+
     coordinators = []
-    search(:node, "fdb_cluster:#{cluster_id}") do |cnode|
+    search(:node, "fdb_cluster:#{cluster_name}") do |cnode|
       (cnode['fdb']['server'] or []).each do |serv|
-        coordinators << "#{cnode['ipaddress']}:#{serv['id']}" if serv['coordinator']
+        if serv['coordinator']
+          addr = "#{cnode['ipaddress']}:#{serv['id']}" 
+          addr += ":tls" if cluster_item['tls']
+          coordinators << addr
+        end
       end
     end
     coordinators.sort!
 
+    update_file = true
     if File.exists?('/etc/foundationdb/fdb.cluster') &&
        (node['fdb']['server'] || []).detect {|s| s['coordinator'] }
-      # Change an existing cluster via command line.
       old_cluster = IO.read('/etc/foundationdb/fdb.cluster')
-      old_coordinators = old_cluster =~ /.+@(.*)/ && $1.split(',')
-      unless coordinators == old_coordinators
-        command = "coordinators #{coordinators.join(' ')}"
-        fdb command do
-          
+      if old_cluster =~ /(.+)@(.+)/ && prefix == $1
+        old_coordinators = $2.split(',')
+        # Change an existing cluster via command line.
+        unless coordinators == old_coordinators
+          command = "coordinators #{coordinators.join(' ')}"
+          fdb command do
+            
+          end
         end
+        update_file = false
       end
-    else
+    end
+    if update_file
       # Just update file.
       file "/etc/foundationdb/fdb.cluster" do
-        content "local:#{cluster_id}@#{coordinators.join(',')}"
+        content "#{prefix}@#{coordinators.join(',')}"
         mode "0644"
       end
     end

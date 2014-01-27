@@ -13,11 +13,23 @@ FoundationDB cluster with attached SQL servers.
 
 * ```fdb::sql_layer``` configure a host to run the SQL layer storing data in the cluster.
 
+## Data Bags
+
+* ```fdb_cluster``` a cluster definition.
+
+  * ```id``` the name of the cluster; matches name in node attributes.
+
+  * ```unique_id``` the 8 character unique id.
+
+  * ```redundancy``` the redundancy mode.
+
+  * ```storage``` the storage engine.
+
 ## Attributes
 
 Configuration of these attributes is made easier with FDB knife commands.
 
-* ```fdb/cluster``` the cluster unique id.
+* ```fdb/cluster``` the cluster name.
 
 * ```fdb/server``` a list of server process configurations having the following:
 

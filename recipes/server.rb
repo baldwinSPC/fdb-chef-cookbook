@@ -5,7 +5,14 @@
 
 new_cluster = node['fdb']['server'][0]['coordinator'] && !::File.exists?('/etc/foundationdb/fdb.cluster')
 
+include_recipe 'fdb::user'
 include_recipe 'fdb::client'
+
+file "fdb.cluster owner" do
+  path '/etc/foundationdb/fdb.cluster'
+  owner 'foundationdb'
+  group 'foundationdb'
+end
 
 pkg_version = "1.0.1"
 pkg_file = case node['platform_family']
@@ -31,13 +38,20 @@ service "foundationdb" do
 #  subscribes :restart, 'file[/etc/foundationdb/fdb.cluster]'
 end
 
-if node.attribute?('fdb')
-  # TODO: generate foundationdb.conf with template.
+template "/etc/foundationdb/foundationdb.conf" do
+  source "conf.erb"
+  group "foundationdb"
+  owner "foundationdb"
+  mode "0644"
+  variables({
+    :servers => node['fdb']['server']
+  })
+  notifies :restart, 'service[foundationdb]', new_cluster ? :immediately : :delayed
 end
 
 if new_cluster
-  cluster = data_bag_item('fdb_cluster', node['fdb']['cluster'])
-  command = "configure new #{cluster['redundancy']} #{cluster['storage']}"
+  cluster_item = data_bag_item('fdb_cluster', node['fdb']['cluster'])
+  command = "configure new #{cluster_item['redundancy']} #{cluster_item['storage']}"
   fdb command do
     timeout 20
   end

@@ -4,7 +4,7 @@ maintainer_email 'distribution@foundationdb.com'
 license          'MIT'
 description      'Installs/Configures fdb'
 long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
-version          '0.1.2'
+version          '0.1.3'
 
 %w{ debian ubuntu centos redhat }.each do |os|
   supports os
@@ -15,7 +15,7 @@ depends           "java"
 
 attribute "fdb/cluster",
   :display_name => "FDB Cluster",
-  :description => "cluster unique id"
+  :description => "fdb_cluster databag name"
 attribute "fdb/server",
   :display_name => "FDB Server",
   :description => "FDB server parameters"

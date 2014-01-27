@@ -14,26 +14,22 @@ Vagrant.configure('2') do |config|
   config.berkshelf.enabled = true
 
   # Script "arguments"
-  server_count = ENV['FDB_SERVER_COUNT'] || 2
-  process_count = ENV['FDB_PROCESS_COUNT'] || 1
-  sql_layer_count = ENV['FDB_SQL_LAYER_COUNT'] || 1
-  cluster_id = ENV['FDB_CLUSTER_ID']
+  server_count = (ENV['FDB_SERVER_COUNT'] || 2).to_i
+  process_count = (ENV['FDB_PROCESS_COUNT'] || 1).to_i
+  sql_layer_count = (ENV['FDB_SQL_LAYER_COUNT'] || 1).to_i
+  cluster_name = ENV['FDB_CLUSTER_NAME'] || 'cluster-1'
 
   # Create everything where solo search can find it.
   Dir.mkdir 'data_bags' unless Dir.exists?('data_bags')
   Dir.mkdir 'data_bags/fdb_cluster' unless Dir.exists?('data_bags/fdb_cluster')
-  if cluster_id.nil?
-    existing = Dir.glob('data_bags/fdb_cluster/*.json').first
-    cluster_id = File.basename(existing, '.json') unless existing.nil?
-  end
-  if cluster_id.nil?
-      chars = [('0'..'9'), ('a'..'z'), ('A'..'Z')].map { |i| i.to_a }.flatten
-      cluster_id = (1..8).map { chars[rand(chars.length)] }.join
-  end    
   
-  unless File.exists?("data_bags/fdb_cluster/#{cluster_id}")
-    IO.write "data_bags/fdb_cluster/#{cluster_id}.json", JSON.dump({
-      :id => cluster_id,
+  cluster_file = "data_bags/fdb_cluster/#{cluster_name}.json"
+  unless File.exists?(cluster_file)
+    chars = [('0'..'9'), ('a'..'z'), ('A'..'Z')].map { |i| i.to_a }.flatten
+    unique_id = (1..8).map { chars[rand(chars.length)] }.join
+    IO.write cluster_file, JSON.dump({
+      :id => cluster_name,
+      :unique_id => unique_id,
       :redundancy => :single,
       :storage => :memory
     })
@@ -47,7 +43,7 @@ Vagrant.configure('2') do |config|
       :memory => 1024, :cpus => 1,
       :ipaddress => "10.33.33.#{30 + n}",
       :fdb => { 
-        :cluster => cluster_id,
+        :cluster => cluster_name,
         :server => (4500..4500+process_count-1).collect {|id| { :id => id } }
       },
       :run_list => [ 'recipe[fdb::server]' ]
@@ -61,7 +57,7 @@ Vagrant.configure('2') do |config|
       :id => "sql-#{n}",
       :memory => 512, :cpus => 2,
       :ipaddress => "10.33.33.#{50 + n}",
-      :fdb => { :cluster => cluster_id },
+      :fdb => { :cluster => cluster_name },
       :run_list => [ 'recipe[fdb::sql_layer]' ]
     }
     nodes[node[:id]] = node
