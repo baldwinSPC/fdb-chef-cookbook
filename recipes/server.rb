@@ -53,6 +53,6 @@ if new_cluster
   cluster_item = data_bag_item('fdb_cluster', node['fdb']['cluster'])
   command = "configure new #{cluster_item['redundancy']} #{cluster_item['storage']}"
   fdb command do
-    timeout 20
+    timeout 60
   end
 end
