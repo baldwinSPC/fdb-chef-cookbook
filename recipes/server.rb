@@ -14,7 +14,7 @@ file "fdb.cluster owner" do
   group 'foundationdb'
 end
 
-pkg_version = "1.0.1"
+pkg_version = "2.0.0"
 pkg_file = case node['platform_family']
            when 'debian' then "foundationdb-server_#{pkg_version}-1_amd64.deb"
            when 'rhel', 'fedora' then "foundationdb-server-#{pkg_version}-1.x86_64.rpm"
