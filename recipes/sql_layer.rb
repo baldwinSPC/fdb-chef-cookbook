@@ -12,6 +12,7 @@ include_recipe 'apt' if node['platform_family'] == 'debian'
 #node.override['java']['install_flavor'] = 'oracle'
 #node.override['java']['oracle']['accept_oracle_download_terms'] = true
 node.override['java']['jdk_version'] = '7'
+node.override['java']['openjdk_packages'] = ['openjdk-7-jre-headless'] if node['platform_family'] == 'debian'
 include_recipe 'java'
 
 pkg_version = "1.9.3"
